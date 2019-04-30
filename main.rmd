@@ -1,0 +1,482 @@
+---
+title: "Forecasting Wholesale Electricity Prices with Time Series Analysis and ARIMA"
+author: "Mikhail Demikhovskiy"
+date: '02.12.2018'
+output: 
+  word_document: 
+    toc: yes
+    reference_docx: ISEA_Template.docx
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+\newpage
+# Introduction
+$\cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot$
+
+In liberalized energy markets, electrical energy is commonly traded on the wholesale level at centralized spot markets. The market participants are power utilities, regional or municipal suppliers, grid operators, large industrial customers, but also banks and trading companies. The wholesale electricity price on such markets varies constantly with the current demand and supply of electricity. By buying or selling electrical energy at the right time frames, a market participant can increase its profits. For instance, if the own costs of production are higher than the current wholesale price, it is advantageous to buy electricity directly from the market; or, if the wholesale price is exceptionally high at the moment, it might be better to produce and sell as much electricity as possible. However, rapidly increasing or decreasing the output is often impossible due to technical specificacies of the generation units. Their operation pattern must be planned in advance. Therefore, to economically optimize the operation it is necessary to forecast future price levels.
+
+The numerous existing forecasting methods can be divided into three groups: qualitative methods, (stochastic) time series analysis, and causal models (Chambers et al., 1971). The first approach gathers qualitative data through expert surveys or market research, which are then analyzed and transformed into numeric values. This kind of forecasting is usually applied when there is a lack in historical data. The time series and causal approaches on the other hand rely on numerical data from the past to estimate the future. Time series methods are useful if the factors affecting the observed value are not sufficiently explored or feature random components. They explore mere patterns and pattern changes, rather then causal relationships. If the relationships between variables in the calculation are understood, causal models can be developed and applied for future data prediction.
+
+In this paper, wholesale prices on the electricity market in New Zealand are observed. Prices forecasting is implemented by means of time series analysis. Future values are predicted with R by applying a non-seasonal Autoregressive Integrated Moving Avereage (ARIMA) model with the forecast package. For this purpose an approach based on the Box-Jenkins methodology is introduced to determine the best fit model parameters. The following sections do not go deep into theoretical details of time series forecasting, but rather provide a comprehensive overview over the basic mathematical tools necessary for dealing with the specific problem definition of the case study presented in this research.
+
+
+\newpage
+# Wholesale Electricity Markets
+$\cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot$
+
+In New Zealand the electricity on the wholesale level is traded on a spot market with multiple trading nodes, i.e.  the wholesale elctricity prices differ from each other depeding on where the grid is accessed to by the market participants. Generators submit half-hour bids that include information about the quantity of electrical energy they are able to deliver in MWh and the corresponding price per MWh. The consumers, in turn, submit their half-hour bids containing information about how much electricity they require and at what price. The trading system operator orders the bids from both the generator and consumer sides creating a demand and a supply curve. The actual wholesale electricity price per MWh at a trading node, also called market clearing price, is determined by the intersection of the demand and supply curves, as depicted in Figure 1 (Amelang and Appunn, 2018):
+
+```{r img_1, echo=FALSE, message=FALSE}
+library(knitr)
+library(here)
+
+dir <- here()
+fig1 <- paste(dir, "/images/fig1.png", sep="")
+
+include_graphics(fig1)
+```
+
+**Figure 1:** Determination of the market clearing price
+
+As shown in the figure, the supply curve also depends on the marginal costs of production, which are different for each production technology.
+
+
+\newpage
+# Time Series Analysis
+$\cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot$
+
+A time series $Y$ is a sequence of values measured in equally spaced discrete time steps or continuously. The values of a discrete time series at each $t \in \{0, 1, 2, 3...\}$ are described as independent identically distributed stochastic variables $y_t$. Thus the sequence of all $y_t$ values can be presented as a realization of a stochastic process (Adhikari and Agrawal, 2013).
+
+The non-seasonal ARIMA is a modified version of the Autoregressive Moving Average (ARMA) model which is a synthesis of the Autoregressive (AR) and the Moving Average (MA) models. The AR model of order $p$, $AR(p)$, shown in equation (1), expresses the value of the variable of interest as a linear combination of $p$ preceding values:
+
+$y_t = c+ \sum_{i=1}^{p} \phi_i \cdot y_{t-i} + \epsilon_t$ (eq. 1)
+
+$y_t$ Value of $Y$ at time step $t$
+
+$c$ Constant
+
+$\phi$ AR model coefficient
+
+$\epsilon_t$ Forecast error (white noise) at time step $t$
+
+The MA model of order $q$, $MA(q)$, presented in equation (2), uses the proximate $q$ past forecast errors to describe the variable of interest:
+
+$y_t = c+ \sum_{i=1}^{q} \theta_i \cdot \epsilon_{t-i}$ (eq. 2)
+
+$y_t$ Value of $Y$ at time step $t$
+
+$c$ Constant
+
+$\theta$ MA model coefficient
+
+$\epsilon_t$ Forecast error (white noise) at time step $t$
+
+Thus, the $ARMA(p, q)$ model is defined in equation (3):
+
+$y_t = c + \sum_{i=1}^{p} \phi_i \cdot y_{t-i} + \epsilon_t + \sum_{j=1}^{q} \theta_i \cdot \epsilon_{t-j}$ (eq.3)
+
+The last part of the ARIMA model is the integrated (I) part, with d as the order of differencing. In contrast to the regular ARMA model, the ARIMA model may be applied not only to stationary but also to non-stationary (and non-seasonal) series, which is explained in the following sub-chapters. Differencing signifies the calculation of the difference of consecutive values. The single values of the differenced time series $Y'$ are calculated as shown in equation (4):
+
+$y'_t=y_t-y_{t-1}$ (eq. 4)
+
+By introducing the lag operator $L$, defined by the relationship $Ly_t = y_{t-1}$, the equation (4) is transformed into the form shown in equation (5):
+
+$y'_t = (1-L)y_t = \Delta y_t$ (eq.5)
+
+The general case of differencing of order $d$ can be expressed as in equation (6):
+
+$y^d_t = (1-L)^dy_t = \Delta^d y_t$ (eq. 6)
+
+Embedding differencing into the ARMA term from equation (3) and converting it accordingly, delivers the general form of the $ARIMA(p,d,q)$ model, presented in equation (7):
+
+$\Delta^d y_t = c + \sum_{i=1}^{p} \phi_i \cdot L^i \Delta^d y_t + (1 + \sum_{j=1}^{q} \theta_j \cdot L^j)\cdot \epsilon_t$ (eq. 7)
+
+In order to perform a forecast with the $ARIMA(p, d, q)$ model the parameters $p$, $d$, and $q$ as well as the coefficients $\phi_i$ and $\theta_j$ have to be determined. For this purpose, a methodology based on the work of Box, Jenkins and Reinsel is applied. The proposed time series analysis approach is roughly divided into the following successive steps:
+
+1. Time series examination
+
+2. Stationarity check and transformation (if necessary)
+
+3. Determination of the right model type
+
+4. Calculation of model parameters
+
+5. Diagnostic checking
+
+
+## Time series examination
+$\cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot$
+
+In order to analyze a time series it is important to identify its underlying elements and patterns by decomposing it, as shown in Figure 2:
+
+```{r img_2, echo=FALSE, message=FALSE}
+fig2 <- paste(dir, "/images/fig2.png", sep="")
+
+include_graphics(fig2)
+```
+
+**Figure 2:** Time series decomposition
+
+
+In general, time series are made up of four components: trend, cycle, seasonality, and a random irregular remainder (Gerbing, 2016). The trend $Y_T$ can be roughly described as the major tendency of changes within the entire observation horizon, while seasonality $Y_S$ may be defined as short-term regular fluctuations of $Y$. The random component $Y_R$ is white noise.
+
+The original time series Y can be presented as a function of $Y_T$, $Y_S$ and $Y_R$ in two different ways:
+
+Additive approach: $Y = Y_T + Y_S + Y_R$
+Multiplicative approach: $Y = Y_T \cdot Y_S \cdot Y_R$
+
+However, the multiplicative equation can be transformed into an additive term by taking a natural or decimal logarithm:
+
+Transformed multiplicative approach: $\log(Y) = \log(Y_T) \cdot \log(Y_S) \cdot \log(Y_R)$
+
+The first step is to visually examine the original time series to get a general idea of the shape of the trend and whether the time series shows seasonal or non-stationary behavior (time-varying mean or variance). If there is a suspicion that the variance may change over time the time series should be transformed. Thereafter the transformed instead of the original data is used for model building. After the analysis the data should be retransformed in order to get the right output values.
+
+To predict future values, a model accurately resembling the time series has to be constructed. For this purpose the information comprised in all of the time series components has to be extracted and incorporated into model building. However, especially if the observed time series is non-stationary, it is sometimes easier to build a model for each component individually, rather than for the entire time series at once (cf. Hyndman and Athanasopoulos, 2013).
+
+
+## Stationarity check and transformation
+$\cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot$
+
+One of the necessary requirements for time series ananlysis and forecasting is the stationarity of the source data the forecasting model is built upon. A stochastic process with the mean μ and the variance σ2 can be considered stationary, if its stochastic properties do not change over time (Nason, 2006), i.e. $\mu \neq \mu(t)$ , $\sigma^2 \neq \sigma^2(t)$, and the autocovariance between $y_t$ and $y_{t+\tau}$ is only dependent on the time delay $\tau$ but not on the time $t$, as expressed in equation (8) (Brockwell and Davis, 2002):
+
+$\gamma(\tau)=Cov(y_t, y_{t+\tau})$ (eq. 8)
+
+A common tool for checking the stationarity of a time series is the Augmented Dickey-Fuller (ADF) test. To perform the test, the incremental changes of the time series are first represented by the regression model presented in equation (9), with $\alpha$, $\beta$ and $\gamma$ being the regression coefficients:
+
+$\Delta y_t = \alpha +\beta t + \gamma y_{t-1}$ (eq. 9)
+
+If $\gamma$ is 0, the equation contains a unit root indicating non-stationarity. Therefore, the presence of a unit root must be checked by performing a hypothesis testing with $H_0: \gamma=0$ being the null hypothesis and $H_1: \gamma<0$ being the alternative hypothesis. The test statistic is calculated in accordance with the equation (10) and compared to the relevant critical value of the Dickey-Fuller distribution:
+
+$DF_{\gamma} = \frac{\hat{\gamma}}{s.e.(\hat{\gamma})}$ (eq.10)
+
+If the test statistic is lower than the critical value and the corresponding p-value is below 0.05, the null hypothesis is rejected, indicating stationarity of the observed time series.
+
+There is also a semi-quantitative way of checking for stationarity that involves visual examination of the time series' correlogramm, i.e. the plot of the autocorrelation function (ACF). The ACF indicates the correlation of the realization of the original time series at time t with its realization in the previous time-steps, i.e. with its "lagged" version. Equation (11) shows the expression for the autocorrelation at lag $\tau$:
+
+$\rho(\tau) = \frac{\gamma(\tau)}{\sigma(y_t)\sigma(y_{t+\tau})}$ (eq. 11)
+
+The ACF values instantly - or after a few lags - falling towards zero and staying within the 95%-confidence interval definded by the equation (12), with $T$ being the length of the time series, strongly indicate stationarity:
+
+$\Delta \approx \pm \frac{1.96}{\sqrt(T)}$ (eq. 12)
+
+Although this approach appears to be simpler than a unit root test, in cases, where the ACF decays slowly, it may fail to correctly determine whether the time series is stationary. Thus, in doubt, unit root tests should be performed.
+
+If the time series does not appear to be stationary, detrending should be performed, e.g. though differencing. Thereafter it should be checked whether the resulting time series is stationary once again. If this is the case, the model parameters $p$ and $q$ can be determined. If not, the differencing procedure should be repeated.
+
+To estimate the optimal model parameters, another kind of function should be looked upon: the Partial Autocorrelation Function (PACF) which is defined as the correlation between $y_t$ and $y_{t+\tau}$ adjusted for the intervening observations (Enders, 1995). The Sample PACF used as an estimation for an T-sized data sample is expressed in the equation (13):
+
+$\hat{\alpha}(\tau) = \begin{cases} 1 &; \tau=0 \\ \hat{\phi}_{\tau \tau} & ;\tau>0  \end{cases}$ (eq. 13)
+
+The value $\hat{\phi}_{\tau \tau}$ is the last component of the vector $\hat{\Phi}_{\tau}=\Gamma_{\tau}^{-1} \cdot \hat{\gamma}_{\tau}$, whereas $\Gamma_{\tau}$ is the autocorrelation matrix and $\hat{\gamma}_{\tau}$ is the vector of ACF values from lag 1 to lag $\tau$.
+
+It should be mentioned that the majority of real-life data does not meet the requirements of stationarity (Thomson, 1994), so that the regular ARMA model is not suitable for forecasting. However, through a suitable transformation the original time series can be made stationary. In compliance with the definition of weak stationarity the goal of the transformation is the establishment of immutability of mean and variance over time. The variance may be steadied by taking a logarithm, a square/quadratic root or by applying Box-Cox's power transformation (Wei, 2005). The stabilization of mean can be achieved by detrending, i.e. removing the trend component. For this, the trend should be identified first which is, however, rather difficult, for there is no consensus about the exact formal definition of trend (Pouzols and Lendasse, 2010). If the trend appears to be deterministic, e.g. by showing linear, polynomial or exponential behavior, its function can be estimated with the ordinary least squares method and subtracted from the original time series (or a ratio should be calculated, depending on whether the additive or multiplicative approach is used). If the resulting residuals are stationary, they can be used for creating a forecasting model. However, if the trend curve apparently has a random course, indicating a stochastic trend, differencing should be applied. If the resulting time series is still non-stationary, another round of differencing, called second-order differencing, should be performed. The procedure should be repeated as often as necessary to achieve stationarity.
+
+
+## Determination of the right model type
+$\cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot$
+
+Observing the shapes of the sample ACF and PACF plots can be useful to determine the right model orders p and q. The models can be inferred from some characteristic features of the ACF and PACF, as described in the following:
+
+**_AR(p)_**: The ACF plot decreases over time. There is an immediate cut-off after lag p in the PACF plot, i.e. the values of the PACF function stay within the confidence interval thereafter.
+
+**_MA(q)_**: There is an immediate cut-off after lag q in the ACF plot. The PACF decreases over time.
+
+**_ARMA(p,q)_**: Both ACF and PACF values decrease over time or cut-off. The exact model orders p and q cannot be determined visually. In this case, multiple models should be assumed first and checked for applicability later on.
+
+
+## Calculation of model parameters
+$\cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot$
+
+Once a model is proposed, the associated model coefficients  $C$, $\phi_i$ and $\theta_j$ have to be calculated. This can be accomplished in various ways, e.g. through Maximum Likelihood and Least Squares Estimations, Yule-Walker equations and the Hannan-Rissanen algorithm (Brockwell and Davis, 2002: pp. 137 ff). However, in this thesis only the Maximum Likelihood Estimation is presented, since this is the method used by the forecast package of R.
+
+Carrying out the Maximum Likelihood Estimation the errors $\epsilon_{t}$ are expected to be independent and identically distributed (i.i.d). Here, a normal distribution with the zero mean and a certain variance $\sigma^{2}$ is assumed, i.e. $\epsilon_{t}$ ~ $N(0,\sigma^{2})$. The joint probability density function for all errors is, therefore, defined in equation (14):
+
+$f(\epsilon_1,...\epsilon_T) = \prod_{t=1}^{T} f(\epsilon_t)$ (eq. 14)
+
+The equation (7) can be transformed to represent the errors $\epsilon_{t}$ as functions of the model parameters $\phi=\{\phi_1, \phi_2,...\phi_p \}$, $\theta=\{\theta_1, \theta_2,...\theta_q \}$ and $C$. Taking these parameters into account, equation (14) can be expressed as the Likelihood function from equation (15):
+
+$f(\epsilon_1,...\epsilon_T|c, \phi, \theta, \sigma^2) = (2\pi\sigma^2)^{-T/2}\exp{(-\frac{1}{2\sigma^2}\sum^T_{t=1}\epsilon^2_t)}$ (eq. 15)
+
+The equation (15) can, in turn, be transformed into an additive logarithmic form, shown in the equation (16), to simplify further calculations:
+
+$\log(f(\epsilon_1,...\epsilon_T|c, \phi, \theta, \sigma^2)) = -\frac{T}{2}\log(2\pi\sigma^2)-\frac{1}{2\sigma^2}\sum^T_{t=1}\epsilon^2_t$ (eq. 16)
+
+Consequently, the estimates for the desired values are calculated in accordance with the equation (17):
+
+$\{\hat{c}, \hat{\phi}, \hat{\theta}, \hat{\sigma}^2\} = \arg \max_{\hat{c}, \hat{\phi}, \hat{\theta}, \hat{\sigma}^2} \log(f(\epsilon_1,...\epsilon_T|c, \phi, \theta, \sigma^2))$ (eq. 17)
+
+
+## Diagnostic checking
+$\cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot$
+
+Now, if multiple ARIMA models come into question, one model should be selected with the aid of information criteria, such as the Akaike Information Criterion (AIC), the Bayesian Information Criterion (BIC), the Hannan-Quinn Information Criterion (HQC) among others. For this purpose a criterion statistic for each model is calculated and the model with the lowest statistic value is chosen. In this thesis the AIC is used for model selection. The AIC can be described as “an approximately unbiased estimate of the Kullback-Leibler index [a measure of difference between two probability distributions] of the fitted model relative to the true model” (Brockwell and Davis, 2002: p. 171) and is defined in equation (18):
+
+$AIC = 2(p+d+q+1)-2\log(f(\epsilon_1,...\epsilon_T|\hat{c}, \hat{\phi}, \hat{\theta}, \hat{\sigma^2}))$ (eq. 18)
+
+Once the optimal ARIMA model is identified and its parameters are determined, diagnostic checking should be performed to validate its suitability. Let $y_t$ be the real value of the time series at time $t$ and $\hat{y}_t$ be the estimated value of the time series at time $t$. A standardized residual $\hat{\epsilon}_t$ at time $t$ is defined in equation (19):
+
+$\hat{\epsilon}_t = \frac{y_t - \hat{y}_t}{\hat{\sigma}}$ (eq. 19)
+
+If the residuals are i.i.d (normal distribution is assumed here) and uncorrelated, the proposed model is fit and can be used for forecasting. To check, whether a model behaves according to this rule, the Ljung-Box test may be applied. The Ljung-Box test is a statistical test, exploring whether the data in a given data set are independently distributed and therefore uncorrelated. The test hypothesizes are defined as follows (cf. Ljung and Box, 1978):
+
+$H_0$: The data in the time series are i.i.d
+
+$H_1$: The data is correlated and therefore not i.i.d
+
+The formula for the test statistic $Q$ is shown in the equation (20):
+
+$Q = n \cdot (n+2) \sum^K_{k=1}\frac{\hat{\rho}^2_k}{n-k}$ (eq. 20)
+
+Here, $K$ is the number of the tested lags. For a non-seasonal time series, a small $K$ - around 10 or 20 - suffices. The null hypothesis is rejected at a 5% significance level if $Q>\chi^{2}_{0.95, df}$, whereas $\chi^{2}_{0.95, df}$ is the 0.05-quantile of the chi-squared distribution with $df$ degrees of freedom.
+
+As a general rule for time series modeling and forecasting it is suggested to “employ the smallest possible number of parameters for adequate representations” (Box et al., 2015: p. 16). Since models of higher order depend on more parameters, inaccuracies in parameter estimation have a heavier impact on the precision of the forecast. Implementing this principle of parsimony in practice, choosing a model with too high $p$, $d$ and $q$ parameters should be avoided.
+
+\newpage
+# Forecasting with R
+$\cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot$
+
+The programming language R provides all the tools necessary to perform the five steps for designing a forecasting model presented in chapter II. For the calculation and visualization of the solutions three main packages are used: **tseries**, **forecast**, **ggplot2** and **anytime**. Thus, these packages must be loaded in the beginning:
+
+```{r load}
+library(tseries)
+library(forecast)
+library(ggplot2)
+library(anytime)
+```
+
+If the source data is available in the form of a numeric vector, it has to be transformed into a timeseries object (ts) first, which is accomplished by the function _ts()_:
+
+```{r ts, eval=FALSE}
+timeseries <- ts(vector, frequency=f)
+```
+
+Here, the variable vector is a numeric vector and the variable timeseries is the corresponding time series. An object of the format ts is a sequence of values assigned to equispaced points of time. The frequency argument defines the number of observations per physical unit of time, which is important for the determination of the seasonal component.
+
+To clear the original time series, i.e. to get rid of outliners and missing spots by replacing them with reasonable values, the function _tsclean()_ can be used:
+
+```{r tsclean, eval=FALSE}
+timeseries <- tsclean(timeseries)
+```
+
+To decompose the preprocessed time series into the trend, seasonal and random components, the following command is used:
+
+```{r decompose, eval=FALSE}
+dcmp <- decompose(timeseries)
+```
+
+The function _decompose()_ generates a list object (dcmp) containing a time series for the trend, seasonal and random component each.
+
+The following command performs the Dickey-Fuller test, printing the value of the test statistic and the corresponding p-value into the console:
+
+```{r adf, eval=FALSE}
+adf.test(timeseries)
+```
+
+The ACF and PACF plots of a certain time series can be displayed separatelly by the following command:
+
+```{r correlogramms, eval=FALSE}
+acf(timeseries)
+pacf(timeseries)
+```
+
+Alternativelly, the following code can be used:
+
+```{r tsdisplay, eval=FALSE}
+tsdisplay(timeseries)
+```
+
+This code displays the time series plot as well as the ACF and PACF plots together at once.
+
+To build an $ARIMA(p,d,q)$ model of a specific order, the _arima()_ function is used:
+
+```{r arima_custom, eval=FALSE}
+fit <- arima(timeseries, order=c(p,d,q))
+```
+
+The function automatically calculates the corresponding model coefficients and returns a list object containing all the necessary information for a model definition. Alternativelly, R can select a model based on the AIC and BIC criteria and calculate its coefficients, automatically:
+
+```{r arima_auto, eval=FALSE}
+fit <- auto.arima(timeseries)
+```
+
+To analize the residuals of the model and, therefore, the quality of the model itself, the _checkresiduals()_ function is used:
+
+```{r checkresiduals, eval=FALSE}
+checkresiduals(fit)
+```
+
+The function receives a list object defining an ARIMA model as an input and returns the solutions of the Ljung-Box test, automatically determining the number of lags and the number of the degrees of freedom, and displays the residuals' ACF plot as well as their histogram.
+
+Finally, to produce and visualize the forecast based on the fitted model, the following code is applied:
+
+```{r forecast, eval=FALSE}
+fc <- forecast(fit, h=t)
+plot(fc)
+```
+
+The _forecast()_ function receives the fitted model as well as the length of the prediction horizon h as inpput and returns a list object defining the forecast solutions, which are then displayed by the _plot()_ function.
+
+
+\newpage
+# Results and Discussion
+$\cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot$
+
+The goal of this paper is to provide a one-day forecast for wholesale electricity prices in the spot market in New Zealand. The prediction model is based on the time series of prices for one month - September 2018 - and is fetched directly from the Electricity Market Information website (EMI) of the Electricity Authority of New Zealand:
+
+```{r read_1}
+rm(list=ls())
+
+df <- read.csv("https://emidatasets.blob.core.windows.net/publicdata/Datasets/Wholesale/Final_pricing/Final_prices/201809_Final_prices.csv", stringsAsFactors = FALSE, header = TRUE)
+
+# First ten entries 
+df[1:10,]
+```
+
+The data is presented in a .csv file containing half-hourly price data at specific dates and on different trading points. The prices can only be modelled for one trading point at a time. Therefore, data from only one trading point are extracted, and unnecessary data is removed. Thus, a new data frame containing only useful imformation, i.e. time and prices, is generated:
+
+```{r read_2}
+df <- df[which(df$Node == 'ABY0111'),]
+df_new <- data.frame("Time"=df$Trading_date, "Prices"=df$Price)
+
+# First ten entries
+df_new[1:10,]
+```
+
+The time data is stored in the format "YYYY-MM-DD". This format, however, has a very low resolution to be used for the formulation and the visual representation of the price time series, because it only contains the date, but not the time of day. Knowing that the first price was recorded at 00:00:00, the time data is converted into the format "YYYY-MM-DD hh-mm-ss":
+
+```{r read_3}
+date_start <- paste(df_new$Time[1], " 0:00:00 EST", sep="")
+date_start <- as.numeric(as.POSIXct(date_start))
+T <- length(df_new$Time)
+df_new$Time <- as.numeric(df_new$Time)
+for (t in 1:T){df_new$Time[t] <- date_start+(t-1)*30*60}
+df_new$Time <- anytime(df_new$Time)
+
+# First ten entries
+df_new[1:10,]
+```
+
+The price data is converted from a numeric vector into a time series. One day is chosen as the default unit of time because the prices are suspected to have a daily seasonal pattern. Thus, since half-hourly data is available, the frequency argument of the ts object is set to 48 (as there are 48 half-hour periods per day).
+
+```{r read_4, message=FALSE}
+df_new$Prices <- ts(df_new$Prices, frequency=48)
+ggplot(df_new, aes(x=Time, y=Prices))+geom_line()+xlab("Date")+ylab("Prices in NZ$/MWh")
+```
+
+The price plot shows a few exceptionally high values which occur extremely seldom. Because of the very low frequency of their occurance, such values can be considered outliners and should not be considered for model formulation. Therefore, the price time series must be cleansed from such values:
+
+```{r read_5, message=FALSE}
+df_new$Prices <- tsclean(df_new$Prices)
+ggplot(df_new, aes(x=Time, y=Prices))+geom_line()+xlab("Date")+ylab("Prices in NZ$/MWh")
+```
+
+Now, the price time series is decomposed assuming an additional composition model:
+
+```{r dcmp}
+prices <- df_new$Prices
+dcmp <- decompose(prices)
+plot(dcmp)
+```
+
+The effect of the identified daily seasonal component is very low in comparison to the trend and random components, accounting for less than 10% of the price value. Therefore, for practical reasons, it is decided to ignore the seasonal component completely.
+
+In order to check for stationarity, the ADF test is performed and the ACF plot is observed:
+
+```{r stat}
+prices <- ts(prices, frequency=1)
+adf.test(prices)
+acf(prices, main="ACF of the prices")
+```
+
+Although, the results of the ADF test imply that the time series is stationary, the ACF plot clearly shows significant autocorrelation between the values from different time steps, which is typical for non-stationary data. Thus, the time series is differenced and checked for stationarity again:
+
+```{r stat_diff}
+adf.test(diff(prices))
+acf(diff(prices), main="ACF of the differenced prices")
+```
+
+The results indicate stationarity, suggesting that the underlying ARIMA model has a differencing order $d$ of 1 or higher.
+
+The ACF and PACF plots of the differenced time series are observed in order to infer the orders $p$ and $q$:
+
+```{r pacf}
+tsdisplay(diff(prices), main="")
+```
+
+From the visual analysis of the two plots it is impossible to determine the most suitable model. Therefore, the automatic model determinition function is applied:
+
+```{r arima}
+fit <- auto.arima(prices, seasonal=FALSE)
+fit
+```
+
+The results suggest that the $ARIMA(3,1,2)$ model is best-suitable to describe the dynamics of the time series. The validity of the model is checked by analyzing the residuals:
+
+```{r res}
+checkresiduals(fit)
+```
+
+The Ljung-Box test fails to reject the null hypothesis. The values of the ACF lie almost entirely within the 5%-confidence region and the distribution of the residuals resembles a normal distribution. All this supports the claim of the proposed model's validity.
+
+At last, the $ARIMA(3,1,2)$ model is validated on the given time series. For this purpose, the data is devided into a training data set, used to calculate the model coefficients, and a validation data set, which is used to compare the simulated model outputs with the actual data. In the given case, the first 1390 entries of the price data in the series are assigned to the training data set, and the rest - to the validation data set:
+
+```{r test}
+hold <- window(prices, start=1391)
+prices_no_hold <- ts(prices[c(1:1390)], frequency=1)
+fit_no_hold <- arima(prices_no_hold, order=c(3,1,2))
+fc_no_hold <- forecast(fit_no_hold, h=48)
+plot(fc_no_hold)
+lines(hold)
+```
+
+The dark blue line represents the mean of the forecast. The actual realizations of the proposed ARIMA(3,1,2) model are fluctuating around this line. With the probability of 80% the prices will stay in the region highlighted by the darker blue, and with the probability of 95% - in the light blue region. Most of the actual data are located within the given intervals, with only a few outliners outside. This is an other indication for the model's validity.
+
+Finally, the forecasts based on the proposed $ARIMA(3,1,2)$ model are generated:
+
+```{r fc}
+fc <- forecast(fit, h=48)
+plot(fc)
+```
+
+```{r clear_workspace, echo=FALSE, message=FALSE}
+rm(list=ls())
+```
+
+\newpage
+# Conclusion and Outlook
+$\cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot$
+
+This paper demonstrates a simple method of forecasting wholesale electricity prices. Although, the results seem plausible, many factors are not considered in the forecasting process. Electricity prices are a subject to several seasonality patterns. Typically, becasue of the rising demand prices are higher during peak load hours than during off-peak hours, at weekends - higher than on working days, in the cold seasons - higher than during warm seasons etc. Also, electricity prices often depend on exteral factors like the prices for primary energy sources, i.e. coal or natural gas. In order to produce more sophisticated and accurate forecasts, these factors should be taken into account. Seasonal components could be modeled with the Fast Fourier Transformation (FFT) and included in seasonal ARIMA models (SARIMA). External factors could be included as external regressors X in an ARIMAX model. Alternativelly, Deep Learning could be applied. The forecasting model could be represented as an Artificial Neural Network, with the external regressors and past sequences of the observed time series being the inputs. This is one of the state-of-the-art approaches to time series forecasting and would be interesting to use for the prediction of future electricity wholesale prices.
+
+
+\newpage
+# References
+$\cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot \cdot$
+
+Adhikari R., Agrawal R. (2013), _An Introductory Study on Time Series Modeling and Forecasting_. Saarbrücken: LAP Lambert Academic Publishing.
+
+Amelang S., Appunn K. (2018), _The Causes and Effects of Negative Power Prices [Online]_ URL: https://www.cleanenergywire.org/factsheets/why-power-prices-turn-negative [accessed on 02.12.2018].
+
+Box G., Jenkins G., Reinsel G., Ljung G. (2015), _Time Series Analysis: Forecasting and Control (5th edition)_. Hoboken, New Jersey: John Wiley & Sons.
+
+Brockwell P., Davis R. (2002), _Introduction to Time Series and Forecasting (2nd edition)_. New-York: Springer-Verlag.
+
+Chambers J., Mullick S., Smith D. (1971), How to Choose the Right Forecasting Technique. _Harvard Business Review_, 1971.
+
+Enders W. (1995), _Applied Econometric Time Series_. Hoboken, New Jersey: John Wiley & Sons.
+
+Gerbing D. (2016), _Time Series Components_. School of Business Administration, Portland State University, Portland.
+
+Hyndman R., Athanasopoulos G. (2013), _Forecasting: Principles and Practice_. Melbourne: Otexts.
+
+Ljung G., Box G. (1978), On A Measure of Lack of Fit in Time Series Models. _Biometrika_, No. 2 (65), 297-303.
+
+Nason G. (2006), Stationary and Non-Stationary Time Series, _Statistics in Vulcanology_ (Mader et al.). London: Geological Society of London.
+
+Pouzols F., Lendasse A. (2010), Effect of Different Detrending Approaches on Computational Intelligence Models of Time Series, _IEEE World Congress on Computational Intelligence_, Barcelona.
+
+Thomson D. (1994), Jackknifing Multiple Window Spectra, _International Conference on Acoustic Speech and Signal Processing_, Vol. 6, 73 – 76.
+
+Wei W. (2005), _Time Series Analysis: Univariate and Multivariate Methods (2nd edition)_. London: Pearson.
