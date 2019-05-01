@@ -1,11 +1,14 @@
 ---
 title: "Forecasting Wholesale Electricity Prices with Time Series Analysis and ARIMA"
 author: "Mikhail Demikhovskiy"
-date: '02.12.2018'
-output: 
-  word_document: 
+date: "02.12.2018"
+output:
+  html_document:
+    df_print: paged
     toc: yes
+  word_document:
     reference_docx: ISEA_Template.docx
+    toc: yes
 ---
 
 ```{r setup, include=FALSE}
@@ -328,10 +331,10 @@ The goal of this paper is to provide a one-day forecast for wholesale electricit
 ```{r read_1}
 rm(list=ls())
 
-df <- read.csv("https://emidatasets.blob.core.windows.net/publicdata/Datasets/Wholesale/Final_pricing/Final_prices/201809_Final_prices.csv", stringsAsFactors = FALSE, header = TRUE)
+load("rda/prices.rda")
 
 # First ten entries 
-df[1:10,]
+head(df, 10)
 ```
 
 The data is presented in a .csv file containing half-hourly price data at specific dates and on different trading points. The prices can only be modelled for one trading point at a time. Therefore, data from only one trading point are extracted, and unnecessary data is removed. Thus, a new data frame containing only useful imformation, i.e. time and prices, is generated:
@@ -341,7 +344,7 @@ df <- df[which(df$Node == 'ABY0111'),]
 df_new <- data.frame("Time"=df$Trading_date, "Prices"=df$Price)
 
 # First ten entries
-df_new[1:10,]
+head(df_new, 10)
 ```
 
 The time data is stored in the format "YYYY-MM-DD". This format, however, has a very low resolution to be used for the formulation and the visual representation of the price time series, because it only contains the date, but not the time of day. Knowing that the first price was recorded at 00:00:00, the time data is converted into the format "YYYY-MM-DD hh-mm-ss":
@@ -355,7 +358,7 @@ for (t in 1:T){df_new$Time[t] <- date_start+(t-1)*30*60}
 df_new$Time <- anytime(df_new$Time)
 
 # First ten entries
-df_new[1:10,]
+head(df_new, 10)
 ```
 
 The price data is converted from a numeric vector into a time series. One day is chosen as the default unit of time because the prices are suspected to have a daily seasonal pattern. Thus, since half-hourly data is available, the frequency argument of the ts object is set to 48 (as there are 48 half-hour periods per day).
